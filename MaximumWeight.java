@@ -46,12 +46,10 @@
  *
  * Date Solved: 12 September 2026
  */
-
 import java.util.*;
 
 class Solution {
 
-    // Represents an interval
     static class Interval {
         int start;
         int end;
@@ -66,7 +64,6 @@ class Solution {
         }
     }
 
-    // Represents a DP state
     static class State {
         long weight;
         List<Integer> indices;
@@ -77,24 +74,6 @@ class Solution {
         }
     }
 
-    /*
-     * Compare two states.
-     *
-     * Smaller internal weight means larger actual weight because
-     * we store weight as negative.
-     *
-     * If weights are equal, choose lexicographically smaller indices.
-     */
-    private State better(State a, State b) {
-
-        if (a.weight != b.weight) {
-            return a.weight < b.weight ? a : b;
-        }
-
-        return compareLists(a.indices, b.indices) <= 0 ? a : b;
-    }
-
-    // Lexicographically compare two lists
     private int compareLists(List<Integer> a, List<Integer> b) {
 
         int size = Math.min(a.size(), b.size());
@@ -109,15 +88,26 @@ class Solution {
         return Integer.compare(a.size(), b.size());
     }
 
-    /*
-     * Find the number of intervals among [0, hi) whose end is
-     * strictly smaller than start.
-     *
-     * This is equivalent to Python's:
-     *
-     *     bisect_left(sortedIntervals, (start,), hi=i)
-     */
-    private int findPrevious(Interval[] intervals, int hi, int start) {
+    private State better(State a, State b) {
+
+        if (a == null) return b;
+        if (b == null) return a;
+
+        // Weight is stored as negative.
+        // Smaller negative value = larger actual weight.
+        if (a.weight != b.weight) {
+            return a.weight < b.weight ? a : b;
+        }
+
+        // Same weight -> lexicographically smaller indices.
+        return compareLists(a.indices, b.indices) <= 0 ? a : b;
+    }
+
+    private int findPrevious(
+            Interval[] intervals,
+            int hi,
+            int start
+    ) {
 
         int left = 0;
         int right = hi;
@@ -136,44 +126,41 @@ class Solution {
         return left;
     }
 
-    public List<Integer> maximumWeight(int[][] intervals) {
+    public int[] maximumWeight(List<List<Integer>> intervals) {
 
-        int n = intervals.length;
+        int n = intervals.size();
 
         Interval[] sortedIntervals = new Interval[n];
 
-        // Create interval objects
         for (int i = 0; i < n; i++) {
 
-            int start = intervals[i][0];
-            int end = intervals[i][1];
-            int weight = intervals[i][2];
+            int start = intervals.get(i).get(0);
+            int end = intervals.get(i).get(1);
+            int weight = intervals.get(i).get(2);
 
             sortedIntervals[i] =
                     new Interval(start, end, weight, i);
         }
 
-        // Sort by end position
+        // Sort by end time.
         Arrays.sort(
                 sortedIntervals,
                 Comparator.comparingInt(a -> a.end)
         );
 
         /*
-         * dp[i][j]:
-         * Best state using the first i intervals
-         * and selecting exactly j intervals.
+         * dp[i][j] =
+         * best result using first i intervals
+         * while selecting at most/exactly j intervals.
+         *
+         * null = impossible state.
          */
         State[][] dp = new State[n + 1][5];
 
-        // Initialize DP
+        // Selecting 0 intervals is always possible.
         for (int i = 0; i <= n; i++) {
-
-            for (int j = 0; j <= 4; j++) {
-
-                dp[i][j] =
-                        new State(0, new ArrayList<>());
-            }
+            dp[i][0] =
+                    new State(0, new ArrayList<>());
         }
 
         for (int i = 0; i < n; i++) {
@@ -181,9 +168,19 @@ class Solution {
             Interval current = sortedIntervals[i];
 
             /*
-             * Find the first interval whose end >= current.start.
-             * Therefore, all intervals before k are non-overlapping
-             * with the current interval.
+             * Skip current interval.
+             */
+            for (int j = 0; j <= 4; j++) {
+                dp[i + 1][j] = dp[i][j];
+            }
+
+            /*
+             * Find first interval that cannot overlap
+             * with current.
+             *
+             * We need:
+             *
+             * previous.end < current.start
              */
             int k = findPrevious(
                     sortedIntervals,
@@ -191,12 +188,15 @@ class Solution {
                     current.start
             );
 
+            /*
+             * Take current interval.
+             */
             for (int j = 1; j <= 4; j++) {
 
-                // Option 1: Skip current interval
-                State skip = dp[i][j];
+                if (dp[k][j - 1] == null) {
+                    continue;
+                }
 
-                // Option 2: Take current interval
                 State previous = dp[k][j - 1];
 
                 List<Integer> takeIndices =
@@ -204,7 +204,7 @@ class Solution {
 
                 takeIndices.add(current.originalIndex);
 
-                // Sort original indices for lexicographical comparison
+                // Required for lexicographical comparison.
                 Collections.sort(takeIndices);
 
                 State take = new State(
@@ -212,11 +212,34 @@ class Solution {
                         takeIndices
                 );
 
-                // Choose the better option
-                dp[i + 1][j] = better(skip, take);
+                dp[i + 1][j] =
+                        better(dp[i + 1][j], take);
             }
         }
 
-        return dp[n][4].indices;
+        /*
+         * IMPORTANT:
+         *
+         * We need AT MOST 4 intervals,
+         * not exactly 4.
+         *
+         * Therefore check all states:
+         * 0, 1, 2, 3, 4.
+         */
+        State best = dp[n][0];
+
+        for (int j = 1; j <= 4; j++) {
+            best = better(best, dp[n][j]);
+        }
+
+        List<Integer> result = best.indices;
+
+        int[] answer = new int[result.size()];
+
+        for (int i = 0; i < result.size(); i++) {
+            answer[i] = result.get(i);
+        }
+
+        return answer;
     }
 }
